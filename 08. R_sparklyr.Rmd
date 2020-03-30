@@ -1,0 +1,186 @@
+---
+output: 
+  html_document:
+    theme: flatly
+    highlight: tango
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache=TRUE, warning = FALSE, message = FALSE)
+```
+
+<br/>
+<span style="float: right;width: 175px;" src="">
+<img src="img/logo_comillas.png"></img>
+</span>
+<h1 style="font-size: 2.5em"> Tecnologías de procesamiento Big Data</h1>
+<br><br>
+<span style="float: right; text-align: right;"><eph>2019</eph></span>
+<br>
+
+---
+
+## Sparklyr
+
+Sparklyr (http://spark.rstudio.com/) es el paquete desarrollado por RStudio para usar Spark desde R. A día de hoy está más avanzado que el paquete oficial del proyecto Apache. Veamos la presentación oficial:
+
+<center>
+![](img/sparklyr.png)
+
+[Ver presentación](https://github.com/rstudio/webinars/blob/master/42-Introduction%20to%20sparklyr/Introducing%20sparklyr%20-%20Webinar.pdf)
+</center>
+
+&nbsp;    
+
+
+Como hemos visto en la presentación, con `sparklyr` podremos hacer uso del potencial que nos brinda Spark desde la sintaxis de `dplyr` un paquete muy utilizado por los usuarios de R.
+
+A continuación, vamos a ver un ejemplo de cómo trabajar con DF de Spark desde R, empezamos por cargar los paquetes necesarios e inicializar la conexión:
+
+```{r}
+library(sparklyr)
+library(dplyr)
+sc <- spark_connect(
+  master = "yarn-client",
+  app_name = "[ICAI] Sparklyr"
+)
+```
+
+
+&nbsp;    
+
+
+Vamos a leer los datos de `/datos/ejercicio_audis/audiencias.parquet` y a realizar el ejercicio propuesto en `'03.DataFrame A fondo'`:
+
+```{r}
+audiencias <- sc %>% spark_read_parquet(
+  'audiencias',
+  '/datos/ejercicio_audis/audiencias.parquet'
+)
+
+head(audiencias)
+audiencias %>% count()
+```
+
+&nbsp;    
+
+Una de las primeras diferencias que podemos observar, es que por defecto `sparklyr` cachea el DF con el que estamos trabajando.
+
+Usamos `summarise` (sintaxis de `dplyr`) para agregar el DF:
+
+```{r}
+audiencias %>% 
+  summarise(
+    id_user = n_distinct(id_user),
+    id_contenido = n_distinct(id_contenido)
+  ) %>% 
+  collect()
+```
+
+&nbsp;    
+
+¿Cuántos contenidos distintos han sido reproducidos al menos 5 veces?
+
+```{r}
+audiencias %>% 
+  group_by(id_contenido) %>% 
+  summarise(n=n()) %>% 
+  filter(n>=5) %>% 
+  count()
+```
+
+&nbsp;    
+
+Cuando conseguimos un DF lo suficientemente pequeño podemos traerlo a R con `collect` y por ejemplo usar la librería `ggplot2` para hacer un gráfico:
+
+```{r,fig.align='center'}
+audiencias %>% 
+  group_by(id_contenido) %>% 
+  summarise(n=n()) %>% 
+  arrange(-n) %>% 
+  head(20) %>% 
+  collect() -> top_contenidos  #HACEMOS UN COLLECT PARA LLEVARLO A R Y PODER HACER GGPLOTS
+
+library(ggplot2)
+
+top_contenidos %>% 
+  mutate(id_contenido = as.factor(id_contenido)) %>% 
+  ggplot(aes(x=id_contenido,y=n,fill=id_contenido)) + 
+  geom_bar(stat='identity')+
+  theme_bw()
+```
+
+
+&nbsp;    
+
+Procedemos a leer el otro dataset necesario para el ejercicio, en este caso es un `json`:
+
+```{r}
+catalogo <- sc %>% spark_read_json('catalogo','/datos/ejercicio_audis/info_contenidos.json')
+catalogo %>% head()
+```
+
+&nbsp;    
+
+Al igual que en el ejercicio, realizamos una agregación y después dos operaciones ventana:
+
+```{r}
+audiencias %>% 
+  group_by(id_user, id_contenido, franja) %>% 
+  summarise(
+    segundos_visualizados = sum(segundos_visualizados,na.rm=TRUE)
+  ) %>% 
+  group_by(id_user,id_contenido) %>%  ##ESTA PARTE ES COMO UNA FUNCION WINDOW EN PYTHON
+  mutate(
+    dummy = row_number(desc(segundos_visualizados)),
+    segundos_totales = sum(segundos_visualizados,na.rm=TRUE)
+  ) %>% 
+  filter(dummy == 1) %>% 
+  inner_join(catalogo,'id_contenido') %>% 
+  mutate(
+    ratings = segundos_totales / duracion
+  ) %>% 
+  mutate(
+    ratings = if_else(ratings>1,1,ratings)
+  ) %>% 
+  select(id_contenido, id_user,franja, ratings) %>% 
+  ungroup() %>% 
+  sdf_register('df_ratings') -> df_ratings
+
+# Fuerzo el cacheo
+sc %>% tbl_cache('df_ratings')
+
+df_ratings %>% count()
+```
+
+&nbsp;    
+
+¿Cuál es el valor medio de la variable `ratings` calculada?
+
+```{r}
+df_ratings %>% 
+  summarise(media = mean(ratings,na.rm = TRUE)) %>% 
+  collect()
+```
+
+&nbsp;    
+
+Procedemos a guardar la tabla resultante en la base de datos de cada usuario:
+
+```{r}
+sc %>% tbl_change_db(Sys.getenv('USER'))
+df_ratings %>% spark_write_table('ratings_sparklyr',mode = 'overwrite')
+```
+
+&nbsp;   
+
+
+Desconectamos la sesión:
+
+```{r}
+sc %>% spark_disconnect()
+```
+

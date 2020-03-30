@@ -1,0 +1,77 @@
+#Esquema del dataframe de contenidos: 
+
+root
+ |-- id_contenido: integer (nullable = true)
+ |-- genero: string (nullable = true)
+ |-- subgenero: string (nullable = true)
+ |-- tipo_contenido: string (nullable = true)
+
+#Esquema del dataframe de audiencias: 
+
+root
+ |-- id_contenido: integer (nullable = true)
+ |-- co_cadena: integer (nullable = true)
+ |-- it_inicio_titulo: string (nullable = true)
+ |-- it_fin_titulo: string (nullable = true)
+ |-- it_inicio_visionado: string (nullable = true)
+ |-- it_fin_visionado: string (nullable = true)
+
+#Registros de muestras_audiencias: 17461469
+#Registros de info_contenidos: 178359
+
+
++----------------------------------------+
+|Contenidos unicos en muestras_audiencias|
++----------------------------------------+
+|                                  159083|
++----------------------------------------+
+
++------------------------------------+
+|Contenidos unicos en info_contenidos|
++------------------------------------+
+|                              178359|
++------------------------------------+
+
++-----------------------------+
+|Cadenas en muestras_audiencia|
++-----------------------------+
+|                          154|
++-----------------------------+
+
+#Esquema del dataframe de audiencias con variables timestamp: 
+
+root
+ |-- id_contenido: integer (nullable = true)
+ |-- co_cadena: integer (nullable = true)
+ |-- it_inicio_titulo: timestamp (nullable = true)
+ |-- it_fin_titulo: timestamp (nullable = true)
+ |-- it_inicio_visionado: timestamp (nullable = true)
+ |-- it_fin_visionado: timestamp (nullable = true)
+
++---------------------------------------+
+|Duracion media de los contenidos en min|
++---------------------------------------+
+|                      78.69994184237699|
++---------------------------------------+
+
+#Esquema del dataframe de contenidos y audiencias agragegado con las nuevas columnas id_weekday, id_month e id_inicio: 
+
+root
+ |-- id_contenido: integer (nullable = true)
+ |-- minutos: double (nullable = true)
+ |-- co_cadena: integer (nullable = true)
+ |-- genero: string (nullable = true)
+ |-- subgenero: string (nullable = true)
+ |-- tipo_contenido: string (nullable = true)
+ |-- id_weekday: string (nullable = true)
+ |-- id_month: string (nullable = true)
+ |-- id_inicio: integer (nullable = true)
+
+#Tamanioo del vector features: 282
+
+
+#RMSE de trainDF: 672.878336
+#RMSE de testDF: 718.451069
+En primer lugar podemos comentar que el error de test no es mucho mayor que el error de entrenamiento por lo que podriamos decir que nuestro modelo no sobre-entrena lo que es positivo. 
+
+Sin embargo, tambien podemos comentar que un error de 718 minutos que es un errror bastante grande. Nuestro modelo no aproxima muy bien los minutos de visualizacion. Quiza necestirariamos un modelo mas complejo como un Random Forest que consiguiera predecir mejor esta variable
